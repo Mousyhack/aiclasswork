@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>범죄 예측 입력 및 시각화</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script> 
+    
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 40px;
+            background-color: #f4f4f4;
+        }
+        .container {
+            max-width: 800px; /* 너비를 넓혀 그래프가 잘 보이도록 조정 */
+            margin: 0 auto;
+            background: rgb(0, 0, 0);
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            opacity: 0.85;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="number"] {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 20px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #5cb85c;
+            color: white;
+            padding: 15px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            width: 100%;
+            font-size: 18px;
+        }
+        button:hover {
+            background-color: #4cae4c;
+        }
+        #result {
+            margin-top: 25px;
+            padding: 15px;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            text-align: center;
+            font-size: 20px;
+            font-weight: bold;
+            color: #333;
+            min-height: 50px;
+        }
+        /* 그래프 컨테이너 스타일 */
+        #chart-container {
+            margin-top: 30px;
+            padding: 20px;
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            border-top: 1px solid #eee;
+        }
+        .bg {
+            width: 100%;
+            height: 100vh;
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: -1;
+        }
+        .t5{
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <img src = "https://media.gettyimages.com/id/1207807435/video/crime-scene-at-night.jpg?s=640x640&k=20&c=LgiAE6fhLAVG9Y-GJA011nnGjEYNsMS3mO82oNYxNwY=" class = bg></div>
+    <div class="container">
+        <h1 class = "t5">범죄 위험도 예측 및 시각화</h1>
+        <p class = "t5">밴쿠버 좌표(예시: 위도 49.26, 경도 -123.11)를 입력해주세요.</p>
+        
+        <label class = "t5" for="latitude">위도 (Latitude):</label>
+        <input type="number" id="latitude" value="49.26" step="0.0001">
+
+        <label class = "t5" for="longitude">경도 (Longitude):</label>
+        <input type="number" id="longitude" value="-123.11" step="0.0001">
+
+        <label class = "t5" for="hour">시점 시간 (HOUR, 0~23):</label>
+        <input type="number" id="hour" value="15" min="0" max="23">
+
+        <label class = "t5" for="month">월 (MONTH, 1~12):</label>
+        <input type="number" id="month" value="7" min="1" max="12">
+
+        <button class = "t5" onclick="predictCrime()">범죄 발생 가능성 예측</button>
+
+        <div  id="result">
+            <p class = "t5">예측 결과를 여기에 표시합니다.</p>p
+        </div>
+        
+        
+    </div>
+
+    <script>
+        // Chart 인스턴스를 저장할 전역 변수
+        let crimeChartInstance = null;
+
+        async function predictCrime() {
+            const latitude = document.getElementById('latitude').value;
+            const longitude = document.getElementById('longitude').value;
+            const hour = document.getElementById('hour').value;
+            const month = document.getElementById('month').value;
+            const resultDiv = document.getElementById('result');
+            
+            // 입력 값 검증
+            if (!latitude || !longitude || !hour || !month) {
+                resultDiv.innerText = "모든 값을 입력해주세요.";
+                return;
+            }
+            
+            resultDiv.innerText = "단일 시점 예측 및 24시간 시각화 준비 중...";
+            
+            try {
+                // 1. 단일 시점 예측 요청 (기존 로직)
+                const data = { latitude, longitude, hour, month };
+                const response = await fetch('http://127.0.0.1:5000/predict', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data),
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(`서버 오류: ${response.status} - ${errorData.error || response.statusText}`);
+                }
+                
+                const result = await response.json();
+                
+                if (result.error) {
+                    resultDiv.innerHTML = `<strong>예측 실패:</strong> ${result.error}`;
+                    return;
+                }
+                
+                // 단일 예측 결과 표시
+                const probability = result.probability;
+                const resultText = `
+                    <strong>입력 시점 ( ${month}월 ${hour}시 ) 의 범죄 발생 예상 확률:</strong> 
+                    <span style="color: ${probability > 50 ? 'red' : probability > 30 ? 'orange' : 'green'};">${probability}%</span>
+                    <br>
+                    (모델 입력 좌표: X=${result.location_x.toFixed(2)}, Y=${result.location_y.toFixed(2)})
+                `;
+                resultDiv.innerHTML = resultText;
+                
+                // 2. 시간대별 예측 요청 및 그래프 그리기
+                // 단일 예측이 성공하면 24시간 예측을 실행합니다.
+                getHourlyPredictions(latitude, longitude, month);
+
+            } catch (error) {
+                console.error('예측 요청 중 오류 발생:', error);
+                resultDiv.innerHTML = `<strong>서버 연결 오류</strong>: ${error.message}. <br>Flask 서버(app.py)가 켜져 있는지 확인하세요.`;
+            }
+        }
+
+
+        // 24시간 예측 데이터를 서버에 요청하고 그래프를 그리는 함수
+        async function getHourlyPredictions(latitude, longitude, month) {
+            const hourlyPredictions = [];
+            const hours = Array.from({length: 24}, (_, i) => i); // 0부터 23시
+
+            // 24시간 동안 서버에 반복적으로 예측 요청을 보냅니다.
+            for (const hour of hours) {
+                const data = { latitude, longitude, hour, month };
+                
+                try {
+                    const response = await fetch('http://127.0.0.1:5000/predict', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(data),
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (response.ok && !result.error) {
+                        hourlyPredictions.push(result.probability); 
+                    } else {
+                        // 요청 실패 시 0 또는 오류 값으로 처리
+                        hourlyPredictions.push(0);
+                    }
+                } catch (error) {
+                    console.error(`시간 ${hour} 예측 실패:`, error);
+                    hourlyPredictions.push(0); // 통신 오류 시 0으로 처리
+                }
+            }
+            
+            // 그래프 그리기 함수 호출
+            drawCrimeChart(hours, predictions);
+        }
+
+
+        // Chart.js를 사용하여 막대 그래프를 그리는 함수
+        function drawCrimeChart(hours, predictions) {
+            const ctx = document.getElementById('crimeChart').getContext('2d');
+
+            // 기존 차트 인스턴스가 있으면 파괴 (차트 업데이트를 위해)
+            if (crimeChartInstance) {
+                crimeChartInstance.destroy();
+            }
+            
+            crimeChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: hours.map(h => `${h}시`), // X축 레이블 (0시, 1시, ...)
+                    datasets: [{
+                        label: '범죄 예상 확률 (%)',
+                        data: predictions,
+                        // 예측 확률에 따라 막대 색상을 다르게 지정
+                        backgroundColor: predictions.map(p => 
+                            p > 50 ? 'rgba(255, 99, 132, 0.7)' : // 50% 초과: 빨강 (고위험)
+                            p > 30 ? 'rgba(255, 159, 64, 0.7)' : // 30% 초과: 주황 (중위험)
+                            'rgba(75, 192, 192, 0.7)' // 30% 이하: 청록 (저위험)
+                        ),
+                        borderColor: predictions.map(p => 
+                            p > 50 ? 'rgba(255, 99, 132, 1)' : 
+                            p > 30 ? 'rgba(255, 159, 64, 1)' : 
+                            'rgba(75, 192, 192, 1)'
+                        ),
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: Math.max(...predictions) * 1.1 || 10, // Y축 최대값을 데이터에 맞춰 조정
+                            title: {
+                                display: true,
+                                text: '범죄 확률 (%)'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: '시간대 (HOUR)'
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    if (context.parsed.y !== null) {
+                                        label += context.parsed.y.toFixed(2) + ' %';
+                                    }
+                                    return label;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>
